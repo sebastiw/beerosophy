@@ -1,0 +1,13 @@
+{application, beerosophy,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {beerosophy_app, []}},
+  {applications, [ kernel
+                 , stdlib
+                 , lager
+                 , cowboy
+                 ]},
+  {env, []},
+  {modules, []}
+ ]}.
