@@ -27,14 +27,24 @@ start_link() ->
 %%====================================================================
 
 init([]) ->
-    {ok, {{one_for_all, 5, 10}, [child(beerosophy_server)]}}.
+    SupFlags = #{ strategy => rest_for_one
+                , intensity => 5
+                , period => 10
+                },
+    {ok, {SupFlags, [ child(beerosophy_server, worker)
+                    , child(beerosophy_database, worker)
+                    , child(beerosophy_python_sup, supervisor)
+                    ]}}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
-child(Mod) ->
-    Restart = permanent,
-    Shutdown = 5000,
-    Type = worker,
-    {Mod, {Mod, start_link, []}, Restart, Shutdown, Type, [Mod]}.
+child(Mod, Type) ->
+    #{ id => Mod
+     , start => {Mod, start_link, []}
+     , restart => permanent
+     , shutdown => 5000
+     , type => Type
+     , modules => [Mod]
+     }.
