@@ -1,7 +1,7 @@
 import os
 import time
 import datetime
-sensor='28-03168c19a6ff' 
+sensor='28-03168c19a6ff'
 
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
@@ -31,11 +31,10 @@ def read_temp():
 def main():
  while True: #
   temp = read_temp()
-  ts=time.time()
-  t=datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-  print("Time:",t," Temperature:",temp,"degrees Celsius")
-  time.sleep(1) # seconds 
-
+  # ts=time.time()
+  # t=datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+  print("{\"name\": \"temp\", \"value\":",temp,"}")
+  time.sleep(1) # seconds
 
 if __name__=='__main__':
  main()
