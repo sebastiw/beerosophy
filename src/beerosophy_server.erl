@@ -21,6 +21,7 @@
 
 -define(SERVER, ?MODULE).
 -define(DEFAULT_PORT, 8080).
+-define(DEFAULT_WAIT, timer:seconds(4)).
 
 -record(state, {}).
 
@@ -47,6 +48,8 @@ init([]) ->
     {ok, _} = cowboy:start_clear(beerosophy_http_listener,
                                  [{port, Port}],
                                  #{env => #{dispatch => Dispatch}}),
+
+    timer:send_after(?DEFAULT_WAIT, start_scripts),
     {ok, #state{}}.
 
 handle_call(_Request, _From, State) ->
@@ -56,6 +59,14 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info(start_scripts, State) ->
+    PrivDir = code:priv_dir(beerosophy),
+    {ok, [Pylons]} = file:consult(filename:join([PrivDir, "pylons.conf"])),
+    lists:map(fun (#{name := N} = P) ->
+                      lager:info("Starting python script '~s'", [N]),
+                      {ok, _} = beerosophy:python(P)
+              end, Pylons),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
