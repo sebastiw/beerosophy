@@ -39,3 +39,5 @@ release: clean | rebar3
 	$(rebar3) eunit
 	$(rebar3) release
 
+start: compile | rebar3
+	$(rebar3) shell
