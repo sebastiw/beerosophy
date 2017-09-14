@@ -3,9 +3,8 @@
 -behaviour(gen_server).
 
 %% API
--export([ start_link/0
+-export([ start_link/1
         , start/1
-        , message/1
         ]).
 
 %% gen_server callbacks
@@ -19,54 +18,57 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {pylons = []}).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(#{name := Name} = Script) ->
+    gen_server:start_link({local, Name}, ?MODULE, Script, []).
 
-start({_, _} = P) ->
-    gen_server:call(?MODULE, {start, P}).
-
-message(F) ->
-    gen_server:cast(?MODULE, {message, F()}).
+start(Script) ->
+    supervisor:start_child(beerosophy_python_sup, [Script]).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
-init([]) ->
+init(#{command := Command, name := SName} = Script) ->
     process_flag(trap_exit, true),
-    PrivDir = code:priv_dir(beerosophy),
-    {ok, [Pylons]} = file:consult(filename:join([PrivDir, "pylons.conf"])),
-    lager:info("Pylons ~p", [Pylons]),
-    Ports = lists:map(fun ({Command, Opts}) ->
-                              open_port({spawn, Command}, Opts)
-                      end, Pylons),
-    {ok, #state{pylons = Ports}}.
+    Options = maps:get(options, Script, []),
+    Ports = open_port({spawn, Command}, Options),
 
-handle_call({start, {Command, Opts}}, _From, #state{pylons = Pys} = State) ->
-    Port = open_port({spawn, Command}, Opts),
-    lager:info("~p: started python process ~p (~p)", [?MODULE, Command, Port]),
-    {reply, {ok, Port}, State#state{pylons = [Port|Pys]}}.
+    %% Start tickers for metrics
+    Exposes = maps:get(exposes, Script, []),
+    lists:map(fun (#{url := Url, metric := MName} = Metric) ->
+                      lager:info("Starting ticker for '~s' on ~p",
+                                 [MName, Url]),
+                      beerosophy:tick(Metric#{script => SName,
+                                              metric => MName});
+
+                  (#{url := Url} = Metric) ->
+                      lager:info("Starting ticker on ~p", [Url]),
+                      beerosophy:tick(Metric#{script => SName})
+              end,
+              Exposes),
+
+    {ok, Script#{port => Ports}}.
+
+handle_call(Msg, _From, State) ->
+    lager:debug("Got unknown call ~p", [Msg]),
+    {noreply, State}.
 
 handle_cast(Msg, State) ->
-    lager:warning("Got unknkown cast ~p", [Msg]),
+    lager:debug("Got unknown cast ~p", [Msg]),
     {noreply, State}.
 
-handle_info({'EXIT', Port, Msg}, #state{pylons = Pys} = State) ->
-    lager:warning("~p: Python process on port ~p died with reason ~p.",
-                  [?MODULE, Port, Msg]),
-    {noreply, State#state{pylons = [P || P <- Pys, P =/= Port]}};
+handle_info({'EXIT', _Port, Reason}, State) ->
+    {stop, Reason, State};
 handle_info(Info, State) ->
-    lager:warning("~p: Got unknown info ~p", [?MODULE, Info]),
+    lager:debug("~p: Got unknown info ~p", [?MODULE, Info]),
     {noreply, State}.
 
-terminate(_Reason, #state{pylons = Pylons}) ->
-    [python:stop(P) || P <- Pylons].
+terminate(_Reason, _State) ->
+    ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.

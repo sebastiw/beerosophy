@@ -4,6 +4,7 @@
 
 %% API
 -export([ start_link/0
+        , start_child/1
         ]).
 
 %% Supervisor callbacks
@@ -19,13 +20,16 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
+start_child(Args) ->
+    supervisor:start_child(?MODULE, Args).
+
 %%%===================================================================
 %%% Supervisor callbacks
 %%%===================================================================
 
 init([]) ->
-    SupFlags = #{ strategy => one_for_one
-                , intensity => 1
+    SupFlags = #{ strategy => simple_one_for_one
+                , intensity => 10
                 , period => 5
                 },
     {ok, {SupFlags, [ child(beerosophy_python) ]}}.
@@ -37,8 +41,8 @@ init([]) ->
 child(Mod) ->
     #{ id => Mod
      , start => {Mod, start_link, []}
-     , restart => permanent
-     , shutdown => 5000
+     , restart => transient
+     , shutdown => brutal_kill
      , type => worker
      , modules => [Mod]
      }.
