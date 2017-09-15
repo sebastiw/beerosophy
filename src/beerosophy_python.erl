@@ -47,6 +47,7 @@ handle_cast(Msg, State) ->
     lager:debug("Got unknown cast ~p", [Msg]),
     {noreply, State}.
 
+%% Start of script
 handle_info(tick, #state{state=not_running, script=Script} = State) ->
     #{name := Name, command := Command} = Script,
     Options = maps:get(options, Script, []),
@@ -61,6 +62,7 @@ handle_info(tick, #state{state=running, script=Script, port=Port} = State) ->
     erlang:port_close(Port),
     {noreply, State};
 
+%% Exits
 handle_info({_Port, {exit_status, 0}}, State) ->
     #state{script=#{name := Name}} = State,
     lager:debug("~p: Python script ~p terminated successfully",
@@ -73,15 +75,17 @@ handle_info({_Port, {exit_status, Exit}}, State) ->
     {noreply, State#state{state=not_running, port=undefined}};
 handle_info({'EXIT', _Port, normal}, State) ->
     #state{script=#{name := Name}} = State,
-    lager:warning("~p: Python script ~p killed",
-                  [?MODULE, Name]),
+    lager:info("~p: Python script ~p stopped", [?MODULE, Name]),
     {noreply, State#state{state=not_running, port=undefined}};
 
+%% Messages from script
 handle_info({_Port, {data, {_, Stdout}}},
             #state{script=#{name := Name}} = State) ->
     lager:info("~p: ~p: ~p", [?MODULE, Name, Stdout]),
     %% Cast to plugin/save to db?
     {noreply, State};
+
+%% Unhandled messages
 handle_info(Info, State) ->
     lager:warning("~p: Got unknown info ~p", [?MODULE, Info]),
     {noreply, State}.
