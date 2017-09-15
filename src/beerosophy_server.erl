@@ -62,10 +62,7 @@ handle_cast(_Msg, State) ->
 handle_info(start_scripts, State) ->
     PrivDir = code:priv_dir(beerosophy),
     {ok, [Pylons]} = file:consult(filename:join([PrivDir, "pylons.conf"])),
-    lists:map(fun (#{name := N} = P) ->
-                      lager:info("Starting python script '~s'", [N]),
-                      {ok, _} = beerosophy:python(P)
-              end, Pylons),
+    [{ok, _} = beerosophy:python(P) || P <-Pylons],
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.

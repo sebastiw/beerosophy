@@ -7,7 +7,6 @@
 
 -export([ start/0
         , metrics/0
-        , tick/1
         , python/1
         ]).
 
@@ -20,9 +19,6 @@ start() ->
 
 metrics() ->
     beerosophy_metrics:get_all().
-
-tick(Metric) ->
-    beerosophy_ticker:start(Metric).
 
 python(Script) ->
     beerosophy_python:start(Script).

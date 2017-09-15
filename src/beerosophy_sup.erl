@@ -34,7 +34,6 @@ init([]) ->
     {ok, {SupFlags, [ child(beerosophy_server, worker)
                     , child(beerosophy_metrics, worker)
                     , child(beerosophy_python_sup, supervisor)
-                    , child(beerosophy_ticker_sup, supervisor)
                     ]}}.
 
 %%====================================================================
