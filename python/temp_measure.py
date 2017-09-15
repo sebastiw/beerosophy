@@ -29,12 +29,8 @@ def read_temp():
   return temp_c#,temp_f
 
 def main():
- while True: #
-  temp = read_temp()
-  # ts=time.time()
-  # t=datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-  print("{\"name\": \"temp\", \"value\":",temp,"}")
-  time.sleep(1) # seconds
+ temp = read_temp()
+ print("%s degrees Celsius" % temp)
 
 if __name__=='__main__':
  main()
