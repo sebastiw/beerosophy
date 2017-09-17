@@ -48,8 +48,6 @@ init([]) ->
     {ok, _} = cowboy:start_clear(beerosophy_http_listener,
                                  [{port, Port}],
                                  #{env => #{dispatch => Dispatch}}),
-
-    timer:send_after(?DEFAULT_WAIT, start_scripts),
     {ok, #state{}}.
 
 handle_call(_Request, _From, State) ->
@@ -59,11 +57,6 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info(start_scripts, State) ->
-    PrivDir = code:priv_dir(beerosophy),
-    {ok, [Pylons]} = file:consult(filename:join([PrivDir, "pylons.conf"])),
-    [{ok, _} = beerosophy:python(P) || P <-Pylons],
-    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 

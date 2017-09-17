@@ -5,9 +5,11 @@
   {mod, {beerosophy_app, []}},
   {applications, [ kernel
                  , stdlib
+                 , sasl
                  , lager
                  , cowboy
                  ]},
+  {start_phases, [{start_scripts, []}]},
   {env, []},
   {modules, []}
  ]}.

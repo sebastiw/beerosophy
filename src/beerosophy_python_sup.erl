@@ -41,7 +41,7 @@ init([]) ->
 child(Mod) ->
     #{ id => Mod
      , start => {Mod, start_link, []}
-     , restart => transient
+     , restart => permanent
      , shutdown => brutal_kill
      , type => worker
      , modules => [Mod]

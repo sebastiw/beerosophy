@@ -27,13 +27,14 @@ start_link() ->
 %%====================================================================
 
 init([]) ->
-    SupFlags = #{ strategy => rest_for_one
+    SupFlags = #{ strategy => one_for_one
                 , intensity => 5
                 , period => 10
                 },
-    {ok, {SupFlags, [ child(beerosophy_server, worker)
+    {ok, {SupFlags, [ child(beerosophy_python_sup, supervisor)
+                    , child(beerosophy_server, worker)
                     , child(beerosophy_metrics, worker)
-                    , child(beerosophy_python_sup, supervisor)
+                    , child(beerosophy_database, worker)
                     ]}}.
 
 %%====================================================================

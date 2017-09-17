@@ -5,25 +5,16 @@
 
 -module(beerosophy_database).
 
--behaviour(cowboy_rest).
-
 -behaviour(gen_server).
+
+-include_lib("stdlib/include/ms_transform.hrl").
 
 %% API
 -export([ start_link/0
-        ]).
-
-%% Cowboy URIs
--export([ save_to_db/2
-        , read_from_db/2
-        ]).
-
-%% Cowboy API
--export([ init/2
-        , terminate/3
-        , allowed_methods/2
-        , content_types_accepted/2
-        , content_types_provided/2
+        , install/1
+        , store/2
+        , select_day/2
+        , read_latest/1
         ]).
 
 %% gen_server API
@@ -36,9 +27,9 @@
         ]).
 
 %% gen_server defines & records
--record(state, {}).
+-record(state, {last_keys}).
 
--record(data, {}).
+-record(data, {key, value}).
 
 %%%===================================================================
 %%% API
@@ -49,69 +40,40 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec save_to_db({string(), iolist()}) -> ok | error.
+-spec install([node()]) -> {[ok], [node()]}.
 
-save_to_db({Key, Data}) ->
-    gen_server:call(?MODULE, {save, Key, Data}).
+install(Nodes) ->
+    case mnesia:create_schema(Nodes) of
+        ok ->
+            ok;
+        {error, {_, {already_exists, _}}} ->
+            ok
+    end,
+    ok = mnesia:start(),
+    case mnesia:create_table(data,
+                             [{attributes, record_info(fields, data)},
+                              {disc_copies, Nodes},
+                              {type, set}]) of
+        {atomic, ok} ->
+            ok;
+        {aborted, {already_exists, data}} ->
+            ok
+    end.
 
--spec read_from_db(string()) -> {ok, iolist()} | error.
+-spec store(atom(), term()) -> ok | error.
 
-read_from_db(Key) ->
-    gen_server:call(?MODULE, {read, Key}).
+store(Sensor, Value) ->
+    gen_server:cast(?MODULE, {store, Sensor, Value}).
 
-%%====================================================================
-%% Cowboy URIs
-%%====================================================================
+-spec select_day(atom(), calendar:date()) -> {error, term()} | {ok, term()}.
 
-save_to_db(Req, State) ->
-    Key = "Get from URI",
-    Data = "Get from cowboy_req",
-    Res = save_to_db({Key, Data}),
-    {Res, Req, State}.
+select_day(Sensor, Day) ->
+    gen_server:call(?MODULE, {select_day, Sensor, Day}).
 
-read_from_db(Req, State) ->
-    Key = "Get from URI",
-    Res = read_from_db(Key),
-    {Res, Req, State}.
+-spec read_latest(atom()) -> {ok, term()} | error.
 
-%%====================================================================
-%% Cowboy API
-%%====================================================================
-
--spec init(Req, _Opts) ->
-                  {ok, Req, State} |
-                  {module(), Req, State} |
-                  {module(), Req, State, hibernate | Timeout} |
-                  {module(), Req, State, Timeout, hibernate}.
-
-init(#{method := Method, path := Path} = Req, _Opts) ->
-    lager:info("~p: Incoming ~p request for ~p",
-               [?MODULE, binary_to_list(Method), binary_to_list(Path)]),
-    {cowboy_rest, Req, #{}}.
-
--spec terminate(_Reason, _Req, _State) -> ok.
-
-terminate(_Reason, _Req, _State) ->
-  ok.
-
-allowed_methods(Req, State) ->
-    Methods = [ <<"GET">>
-              , <<"HEAD">>
-              , <<"POST">>],
-    {Methods, Req, State}.
-
-content_types_accepted(Req, State) ->
-    Types = [ {<<"text/plain">>, save_to_db}
-            , {<<"application/json">>, save_to_db}
-            , {<<"application/x-www-form-urlencoded">>, save_to_db}
-            ],
-    {Types, Req, State}.
-
-content_types_provided(Req, State) ->
-    Types = [ {<<"application/json">>, read_from_db}
-            , {<<"text/plain">>, read_from_db}
-            ],
-    {Types, Req, State}.
+read_latest(Sensor) ->
+    gen_server:call(?MODULE, {read_latest, Sensor}).
 
 %%====================================================================
 %% gen_server API
@@ -119,22 +81,44 @@ content_types_provided(Req, State) ->
 
 init([]) ->
     process_flag(trap_exit, true),
-    mnesia:create_schema([node()]),
-    mnesia:start(),
-    mnesia:create_table(data, [{attributes, record_info(fields, data)}]),
-
     lager:info("~p: started", [?MODULE]),
-    {ok, #state{}}.
+    {ok, #state{last_keys=#{}}}.
 
+handle_cast({store, Sensor, Value}, #state{last_keys=Keys} = State) ->
+    lager:info("~p: store value in ~p", [?MODULE, Sensor]),
+    Now = calendar:universal_time(),
+    mnesia:dirty_write(#data{key={Sensor, Now}, value=Value}),
+    {noreply, State#state{last_keys=Keys#{Sensor=>Now}}};
 handle_cast(_What, State) ->
     {noreply, State}.
 
-handle_call({read, K}, _Who, State) ->
-    lager:info("~p: read ~p", [?MODULE, K]),
-    {reply, read(K), State};
-handle_call({store, K, D}, _Who, State) ->
-    lager:info("~p: store ~p", [?MODULE, K]),
-    {reply, store(K, D), State}.
+handle_call({select_day, Sensor, Day}, _Who, State) ->
+    Match = ets:fun2ms(fun (#data{key={S, {D, _}}} = Data)
+                             when S =:= Sensor, D =:= Day ->
+                               Data
+                       end),
+    Reply = mnesia:transaction(
+              fun () ->
+                      V = mnesia:select(data, Match),
+                      lists:sort(V)
+              end),
+    case Reply of
+        {aborted, Reason} ->
+            {reply, {error, {aborted, Reason}}, State};
+        {atomic, Values} ->
+            {reply, {ok, Values}, State}
+    end;
+handle_call({read_latest, Sensor}, _Who, #state{last_keys=Keys} = State) ->
+    case Keys of
+        #{Sensor := Time} ->
+            {atomic, [Val]} = mnesia:transaction(
+                                fun () ->
+                                        mnesia:read({data, {Sensor, Time}})
+                                end),
+            {reply, {ok, Val}, State};
+        _ ->
+            {reply, sensor_not_found, State}
+    end.
 
 handle_info(_What, State) ->
     {noreply, State}.
@@ -148,9 +132,3 @@ terminate(_Why, _State) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-read(_K) ->
-    {ok, ""}.
-
-store(_K, _D) ->
-    ok.

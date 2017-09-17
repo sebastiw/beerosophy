@@ -36,6 +36,7 @@ start(Script) ->
 
 init(Script) ->
     process_flag(trap_exit, true),
+    self() ! tick,
     timer:send_interval(?INTERVAL, tick),
     {ok, #state{script = Script}}.
 
@@ -52,7 +53,7 @@ handle_info(tick, #state{state=not_running, script=Script} = State) ->
     #{name := Name, command := Command} = Script,
     Options = maps:get(options, Script, []),
     %% Run Python command
-    lager:info("Running python script '~s'", [Name]),
+    lager:debug("Running python script '~s'", [Name]),
     Port = erlang:open_port({spawn, Command}, [exit_status|Options]),
     {noreply, State#state{state=running, port=Port}};
 handle_info(tick, #state{state=running, script=Script, port=Port} = State) ->
@@ -75,14 +76,23 @@ handle_info({_Port, {exit_status, Exit}}, State) ->
     {noreply, State#state{state=not_running, port=undefined}};
 handle_info({'EXIT', _Port, normal}, State) ->
     #state{script=#{name := Name}} = State,
-    lager:info("~p: Python script ~p stopped", [?MODULE, Name]),
+    lager:debug("~p: Python script ~p stopped", [?MODULE, Name]),
     {noreply, State#state{state=not_running, port=undefined}};
 
 %% Messages from script
 handle_info({_Port, {data, {_, Stdout}}},
+            #state{script=#{name := temperature=Name}} = State) ->
+    lager:info("~p: ~p: ~p", [?MODULE, Name, Stdout]),
+    Temp = hd(string:split(Stdout, " ")),
+    T = string:to_float(Temp),
+    %% Save to db
+    beerosophy:store(Name, #{value => T}),
+    {noreply, State};
+handle_info({_Port, {data, {_, Stdout}}},
             #state{script=#{name := Name}} = State) ->
     lager:info("~p: ~p: ~p", [?MODULE, Name, Stdout]),
-    %% Cast to plugin/save to db?
+    %% Save to db
+    beerosophy:store(Name, Stdout),
     {noreply, State};
 
 %% Unhandled messages
