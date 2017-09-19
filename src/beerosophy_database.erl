@@ -81,8 +81,9 @@ read_latest(Sensor) ->
 
 init([]) ->
     process_flag(trap_exit, true),
+    Keys = read_keys(),
     lager:info("~p: started", [?MODULE]),
-    {ok, #state{last_keys=#{}}}.
+    {ok, #state{last_keys=Keys}}.
 
 handle_cast({store, Sensor, Value}, #state{last_keys=Keys} = State) ->
     lager:info("~p: store value in ~p", [?MODULE, Sensor]),
@@ -106,7 +107,7 @@ handle_call({select_day, Sensor, Day}, _Who, State) ->
         {aborted, Reason} ->
             {reply, {error, {aborted, Reason}}, State};
         {atomic, Values} ->
-            {reply, {ok, Values}, State}
+            {reply, {ok, encode(Values)}, State}
     end;
 handle_call({read_latest, Sensor}, _Who, #state{last_keys=Keys} = State) ->
     case Keys of
@@ -115,7 +116,7 @@ handle_call({read_latest, Sensor}, _Who, #state{last_keys=Keys} = State) ->
                                 fun () ->
                                         mnesia:read({data, {Sensor, Time}})
                                 end),
-            {reply, {ok, Val}, State};
+            {reply, {ok, encode(Val)}, State};
         _ ->
             {reply, sensor_not_found, State}
     end.
@@ -132,3 +133,29 @@ terminate(_Why, _State) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+read_keys() ->
+    {atomic, Keys} =
+        mnesia:transaction(
+          fun () ->
+                  Keys = mnesia:all_keys(data),
+                  lists:foldl(fun ({S, Date}, Acc) ->
+                                     case Acc of
+                                         #{S := ODate} when ODate >= Date ->
+                                             Acc;
+                                         _ ->
+                                             Acc#{S => Date}
+                                     end
+                             end, #{}, Keys)
+          end),
+    Keys.
+
+encode([]) ->
+    [];
+encode([D|Rest]) ->
+    [encode(D)|encode(Rest)];
+encode(#data{key={Sensor, {{Y,Mo,D}, {H,Mi,S}}}, value=Val}) ->
+    Dt = io_lib:format("~B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B",
+                       [Y, Mo, D, H, Mi, S]),
+    DateString = list_to_binary(lists:flatten(Dt)),
+    #{sensor => Sensor, datetime => DateString, value => list_to_binary(Val)}.
