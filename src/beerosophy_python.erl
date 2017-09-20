@@ -88,7 +88,7 @@ handle_info({'EXIT', _Port, normal}, State) ->
 handle_info({_Port, {data, {_, Stdout}}},
             #state{script=#{name := temperature=Name}} = State) ->
     lager:info("~p: ~p: ~p", [?MODULE, Name, Stdout]),
-    Temp = hd(string:split(Stdout, " ")),
+    Temp = hd(string:tokens(Stdout, " ")),
     T = string:to_float(Temp),
     %% Save to db
     beerosophy:store(Name, #{value => T}),
