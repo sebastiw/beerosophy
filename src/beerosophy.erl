@@ -41,10 +41,7 @@ read_latest(Sensor) ->
 read_day(Sensor, Day) when is_binary(Sensor) ->
     read_day(binary_to_atom(Sensor, utf8), Day);
 read_day(Sensor, Day) when is_binary(Day) ->
-    [Y, M, D] = binary:split(Day, <<"-">>, [global]),
-    Date = {binary_to_integer(Y),
-            binary_to_integer(M),
-            binary_to_integer(D)},
+    Date = beerosophy_utils:binary_to_date(Day),
     read_day(Sensor, Date);
 read_day(Sensor, Day) ->
     beerosophy_database:select_day(Sensor, Day).
