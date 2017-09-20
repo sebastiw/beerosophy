@@ -51,6 +51,7 @@ handle_cast(Msg, State) ->
 %% Start of script
 handle_info(execute, #state{state=not_running, script=Script} = State) ->
     #{name := Name, command := Command} = Script,
+    beerosophy:inc(counter_name(Script, "runs")),
     Options = maps:get(options, Script, []),
     %% Run Python command
     lager:debug("Running python script '~s'", [Name]),
@@ -58,6 +59,7 @@ handle_info(execute, #state{state=not_running, script=Script} = State) ->
     {noreply, State#state{state=running, port=Port}};
 handle_info(execute, #state{state=running, script=Script, port=Port} = State) ->
     #{name := Name} = Script,
+    beerosophy:inc(counter_name(Script, "long_running")),
     lager:warning("~p: Killing long running script ~p", [?MODULE, Name]),
     lager:warning("~p: ~p", [Name, erlang:port_info(Port)]),
     erlang:port_close(Port),
@@ -65,17 +67,20 @@ handle_info(execute, #state{state=running, script=Script, port=Port} = State) ->
 
 %% Exits
 handle_info({_Port, {exit_status, 0}}, State) ->
-    #state{script=#{name := Name}} = State,
+    #state{script=#{name := Name} = Script} = State,
+    beerosophy:inc(counter_name(Script, "terminated_successfully")),
     lager:debug("~p: Python script ~p terminated successfully",
                 [?MODULE, Name]),
     {noreply, State#state{state=not_running, port=undefined}};
 handle_info({_Port, {exit_status, Exit}}, State) ->
-    #state{script=#{name := Name}} = State,
+    #state{script=#{name := Name} = Script} = State,
+    beerosophy:inc(counter_name(Script, "terminated_unsuccessfully")),
     lager:error("~p: Python script ~p died with exit status ~p",
                 [?MODULE, Name, Exit]),
     {noreply, State#state{state=not_running, port=undefined}};
 handle_info({'EXIT', _Port, normal}, State) ->
-    #state{script=#{name := Name}} = State,
+    #state{script=#{name := Name} = Script} = State,
+    beerosophy:inc(counter_name(Script, "terminated_exit")),
     lager:debug("~p: Python script ~p stopped", [?MODULE, Name]),
     {noreply, State#state{state=not_running, port=undefined}};
 
@@ -109,3 +114,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+counter_name(#{name := Name}, Operation)  ->
+    list_to_atom(atom_to_list(Name) ++ [$_|Operation]).

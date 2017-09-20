@@ -21,7 +21,6 @@
 
 -define(SERVER, ?MODULE).
 -define(DEFAULT_PORT, 8080).
--define(DEFAULT_WAIT, timer:seconds(4)).
 
 -record(state, {}).
 

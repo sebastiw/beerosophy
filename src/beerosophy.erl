@@ -7,6 +7,7 @@
 
 -export([ start/0
         , install/1
+        , inc/1
         , metrics/0
         , python/1
         , store/2
@@ -23,6 +24,9 @@ start() ->
 
 install(Nodes) ->
     beerosophy_database:install(Nodes).
+
+inc(Name) ->
+    beerosophy_metrics:inc(Name).
 
 metrics() ->
     beerosophy_metrics:get_all().
