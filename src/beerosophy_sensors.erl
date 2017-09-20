@@ -5,6 +5,7 @@
 %% Cowboy URIs
 -export([ today/2
         , latest/2
+        , interval/2
         , day/2
         ]).
 
@@ -41,6 +42,21 @@ latest(Req, State) ->
                   E
           end,
     Res = jsone:encode(Val),
+    {Res, Req, State}.
+
+interval(Req, State) ->
+    Sensor = cowboy_req:binding(sensor, Req),
+    {DayDefault, _} = erlang:localtime(),
+    F = cowboy_req:binding(from, Req, DayDefault),
+    T = cowboy_req:binding(to, Req, DayDefault),
+    Interval = days(beerosophy_utils:binary_to_date(F),
+                    beerosophy_utils:binary_to_date(T)),
+    Values = [beerosophy:read_day(Sensor, D) || D <- Interval],
+    Val = lists:foldl(fun ({ok, []}, Acc) -> Acc;
+                          ({ok, V}, Acc) -> [V|Acc];
+                          (E, Acc) -> [E|Acc]
+                      end, [], Values),
+    Res = jsone:encode(lists:sort(Val)),
     {Res, Req, State}.
 
 day(Req, State) ->
@@ -85,17 +101,21 @@ content_types_accepted(Req, State) ->
     Types = [],
     {Types, Req, State}.
 
-content_types_provided(Req, State) ->
-    Function = case State of
-                   #{options := [X]} ->
-                       X;
-                   _ ->
-                       day
-               end,
-    Types = [ {<<"application/json">>, Function}
+content_types_provided(Req, #{options := [Fun]} = State) ->
+    Types = [ {<<"application/json">>, Fun}
             ],
     {Types, Req, State}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+days(To, From) ->
+    days(To, From, []).
+
+days(To, To, Acc) ->
+    [To|Acc];
+days(From, To, Acc) ->
+    Next = calendar:date_to_gregorian_days(From)+1,
+    NewFrom = calendar:gregorian_days_to_date(Next),
+    days(NewFrom, To, [From|Acc]).
