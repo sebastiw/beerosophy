@@ -36,8 +36,8 @@ start(Script) ->
 
 init(Script) ->
     process_flag(trap_exit, true),
-    self() ! tick,
-    timer:send_interval(?INTERVAL, tick),
+    self() ! execute,
+    timer:send_interval(?INTERVAL, execute),
     {ok, #state{script = Script}}.
 
 handle_call(Msg, _From, State) ->
@@ -49,14 +49,14 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 %% Start of script
-handle_info(tick, #state{state=not_running, script=Script} = State) ->
+handle_info(execute, #state{state=not_running, script=Script} = State) ->
     #{name := Name, command := Command} = Script,
     Options = maps:get(options, Script, []),
     %% Run Python command
     lager:debug("Running python script '~s'", [Name]),
     Port = erlang:open_port({spawn, Command}, [exit_status|Options]),
     {noreply, State#state{state=running, port=Port}};
-handle_info(tick, #state{state=running, script=Script, port=Port} = State) ->
+handle_info(execute, #state{state=running, script=Script, port=Port} = State) ->
     #{name := Name} = Script,
     lager:warning("~p: Killing long running script ~p", [?MODULE, Name]),
     lager:warning("~p: ~p", [Name, erlang:port_info(Port)]),
