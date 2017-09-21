@@ -8,11 +8,16 @@ test: xref eunit ct
 rebar3 := $(shell which rebar3)
 ifndef rebar3
 	rebar3 := ./rebar3
-endif
 
 rebar3:
 	wget https://s3.amazonaws.com/rebar3/rebar3
 	chmod +x ./rebar3
+
+else
+
+rebar3: ;
+
+endif
 
 clean: | rebar3
 	$(rebar3) clean --all
