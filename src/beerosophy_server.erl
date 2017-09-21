@@ -38,7 +38,7 @@ start_link() ->
 init([]) ->
     process_flag(trap_exit, true),
     PrivDir = code:priv_dir(beerosophy),
-    {ok, [Routes]} = file:consult(filename:join([PrivDir, "dispatch.conf"])),
+    {ok, [Routes]} = file:consult(filename:join([PrivDir, "routes.conf"])),
     lager:info("Routes ~p", [Routes]),
     Dispatch = cowboy_router:compile(Routes),
 

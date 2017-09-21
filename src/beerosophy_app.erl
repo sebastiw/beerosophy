@@ -25,7 +25,7 @@ start(_StartType, _Args) ->
 start_phase(start_scripts, normal, _Args) ->
     lager:info("Starting python scripts", []),
     PrivDir = code:priv_dir(beerosophy),
-    {ok, [Pylons]} = file:consult(filename:join([PrivDir, "pylons.conf"])),
+    {ok, [Pylons]} = file:consult(filename:join([PrivDir, "python.conf"])),
     lists:foreach(fun (P) -> {ok, _} = beerosophy:python(P) end,
                   Pylons).
 
