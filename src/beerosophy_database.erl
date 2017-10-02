@@ -154,6 +154,11 @@ encode([]) ->
     [];
 encode([D|Rest]) ->
     [encode(D)|encode(Rest)];
+encode(#data{key={temperature, {{Y,Mo,D}, {H,Mi,S}}}, value=#{value := Val}}) ->
+    Dt = io_lib:format("~B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B",
+                       [Y, Mo, D, H, Mi, S]),
+    DateString = list_to_binary(lists:flatten(Dt)),
+    #{sensor => temperature, datetime => DateString, value => erlang:float_to_binary(Val)};
 encode(#data{key={Sensor, {{Y,Mo,D}, {H,Mi,S}}}, value=Val}) ->
     Dt = io_lib:format("~B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B",
                        [Y, Mo, D, H, Mi, S]),
